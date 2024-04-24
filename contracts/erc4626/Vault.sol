@@ -10,15 +10,26 @@ import {SafeTransferLib} from "./SafeTransferLib.sol";
 import "../common/safe-HTS/SafeHTS.sol";
 import "../common/safe-HTS/IHederaTokenService.sol";
 
+/**
+ * @title The Vault ERC4626 contract ????????????????????????
+ */
 contract HederaVault is IERC4626 {
+    // Enables safer ERC20 interactions.
     using SafeTransferLib for ERC20;
+    // Provides fixed-point math operations.
     using FixedPointMathLib for uint256;
+    // Provides bit manipulation capabilities.
     using Bits for uint256;
 
+    // The ERC20 token used as the vault's underlying asset.
     ERC20 public immutable asset;
+    // Address of the new token created by this vault.
     address public newTokenAddress;
+    // Total amount of the underlying token currently managed by the vault.
     uint public totalTokens;
+    // Dynamic array to store addresses of reward tokens associated with the vault.
     address[] public tokenAddress;
+    // Owner of the vault.
     address public owner;
 
     /**
@@ -29,6 +40,13 @@ contract HederaVault is IERC4626 {
      */
     event CreatedToken(address indexed createdToken);
 
+    /**
+     * @dev Initializes contract with passed parameters
+     *
+     * @param _underlying The address of the asset token
+     * @param _name The token name
+     * @param _symbol The token symbol
+     */
     constructor(
         ERC20 _underlying,
         string memory _name,
@@ -69,13 +87,18 @@ contract HederaVault is IERC4626 {
     }
 
     struct UserInfo {
+        // Number of shares owned by the user.
         uint num_shares;
+        // Mapping from token address to the last amount of rewards claimed by the user.
         mapping(address => uint) lastClaimedAmountT;
+        // Flag to indicate whether the user has an existing record.
         bool exist;
     }
 
     struct RewardsInfo {
+        // Total amount of rewards allocated for the token.
         uint amount;
+        // Flag to indicate whether rewards for the token are active.
         bool exist;
     }
 
@@ -89,41 +112,41 @@ contract HederaVault is IERC4626 {
     /**
      * @dev Deposits staking token to the Vault and returns shares.
      *
-     * @param amount The amount of staking token to send.
-     * @param to The shares receiver address.
+     * @param assets The amount of staking token to send.
+     * @param receiver The shares receiver address.
      * @return shares The amount of shares to receive.
      */
-    function deposit(uint256 amount, address to) public override returns (uint256 shares) {
-        if ((shares = previewDeposit(amount)) == 0) revert ZeroShares(amount);
+    function deposit(uint256 assets, address receiver) public override returns (uint256 shares) {
+        if ((shares = previewDeposit(assets)) == 0) revert ZeroShares(assets);
 
-        asset.safeTransferFrom(msg.sender, address(this), amount);
+        asset.safeTransferFrom(msg.sender, address(this), assets);
 
-        totalTokens += amount;
+        totalTokens += assets;
 
-        SafeHTS.safeMintToken(newTokenAddress, uint64(amount), new bytes[](0));
+        SafeHTS.safeMintToken(newTokenAddress, uint64(assets), new bytes[](0));
 
-        SafeHTS.safeTransferToken(newTokenAddress, address(this), msg.sender, int64(uint64(amount)));
+        SafeHTS.safeTransferToken(newTokenAddress, address(this), msg.sender, int64(uint64(assets)));
 
-        emit Deposit(msg.sender, to, amount, shares);
+        emit Deposit(msg.sender, receiver, assets, shares);
 
-        afterDeposit(amount);
+        afterDeposit(assets);
     }
 
     /**
-     * @dev Mints.
+     * @dev Mints the underlying token.
      *
      * @param shares The amount of shares to send.
-     * @param to The receiver of tokens.
-     * @return amount The amount of tokens to receive.
+     * @param receiver The receiver of the tokens.
+     * @return amount The amount of the tokens to receive.
      */
-    function mint(uint256 shares, address to) public override returns (uint256 amount) {
-        _mint(to, amount = previewMint(shares));
+    function mint(uint256 shares, address receiver) public override returns (uint256 amount) {
+        _mint(receiver, amount = previewMint(shares));
 
         asset.approve(address(this), amount);
 
         totalTokens += amount;
 
-        emit Deposit(msg.sender, to, amount, shares);
+        emit Deposit(msg.sender, receiver, amount, shares);
 
         asset.safeTransferFrom(msg.sender, address(this), amount);
 
@@ -133,44 +156,44 @@ contract HederaVault is IERC4626 {
     /**
      * @dev Withdraws staking token and burns shares.
      *
-     * @param amount The amount of shares.
-     * @param to The staking token receiver.
-     * @param from The .
-     * @return shares The amount of shares to burn.
+     * @param assets The amount of shares.
+     * @param receiver The staking token receiver.
+     * @param _owner The owner of the shares.
+     * @return shares The amount of the shares to burn.
      */
-    function withdraw(uint256 amount, address to, address from) public override returns (uint256 shares) {
-        beforeWithdraw(amount);
+    function withdraw(uint256 assets, address receiver, address _owner) public override returns (uint256 shares) {
+        beforeWithdraw(assets);
 
-        SafeHTS.safeTransferToken(newTokenAddress, msg.sender, address(this), int64(uint64(amount)));
+        SafeHTS.safeTransferToken(newTokenAddress, msg.sender, address(this), int64(uint64(assets)));
 
-        SafeHTS.safeBurnToken(newTokenAddress, uint64(amount), new int64[](0));
+        SafeHTS.safeBurnToken(newTokenAddress, uint64(assets), new int64[](0));
 
         // _burn(from, shares = previewWithdraw(amount));
-        totalTokens -= amount;
+        totalTokens -= assets;
 
-        emit Withdraw(from, to, amount, shares);
+        emit Withdraw(_owner, receiver, assets, shares);
 
-        asset.safeTransfer(to, amount);
+        asset.safeTransfer(receiver, assets);
     }
 
     /**
-     * @dev Redeems .
+     * @dev Redeems shares for underlying assets.
      *
      * @param shares The amount of shares.
-     * @param to The staking token receiver.
-     * @param from The .
+     * @param receiver The staking token receiver.
+     * @param _owner The owner of the shares.
      * @return amount The amount of shares to burn.
      */
-    function redeem(uint256 shares, address to, address from) public override returns (uint256 amount) {
+    function redeem(uint256 shares, address receiver, address _owner) public override returns (uint256 amount) {
         require((amount = previewRedeem(shares)) != 0, "ZERO_ASSETS");
 
         amount = previewRedeem(shares);
-        _burn(from, shares);
+        _burn(_owner, shares);
         totalTokens -= amount;
 
-        emit Withdraw(from, to, amount, shares);
+        emit Withdraw(_owner, receiver, amount, shares);
 
-        asset.safeTransfer(to, amount);
+        asset.safeTransfer(receiver, amount);
     }
 
     /*///////////////////////////////////////////////////////////////
@@ -214,52 +237,114 @@ contract HederaVault is IERC4626 {
                         ACCOUNTING LOGIC
     //////////////////////////////////////////////////////////////*/
 
+    /**
+     * @dev Returns amount of assets on the balance of this contract
+     *
+     * @return Asset balance of this contract
+     */
     function totalAssets() public view override returns (uint256) {
         return asset.balanceOf(address(this));
     }
 
+    /**
+     * @dev Calculates the amount of underlying assets.
+     *
+     * @param user The address of the user.
+     * @return The amount of underlying assets equivalent to the user's shares.
+     */
     function assetsOf(address user) public view override returns (uint256) {
         return previewRedeem(balanceOf[user]);
     }
 
+    /**
+     * @dev Calculates how much one share is worth in terms of the underlying asset.
+     *
+     * @return The amount of assets one share can redeem.
+     */
     function assetsPerShare() public view override returns (uint256) {
         return previewRedeem(10 ** decimals);
     }
 
+    /**
+     * @dev Returns the maximum number of underlying assets that can be deposited by user.
+     *
+     * @return The maximum amount of assets that can be deposited.
+     */
     function maxDeposit(address) public pure override returns (uint256) {
         return type(uint256).max;
     }
 
+    /**
+     * @dev Returns the maximum number of shares that can be minted by any user.
+     *
+     * @return The maximum number of shares that can be minted.
+     */
     function maxMint(address) public pure override returns (uint256) {
         return type(uint256).max;
     }
 
-    function maxWithdraw(address user) public view override returns (uint256) {
-        return assetsOf(user);
+    /**
+     * @dev Calculates the maximum amount of assets that can be withdrawn.
+     *
+     * @param _owner The address of the owner.
+     * @return The maximum amount of assets that can be withdrawn.
+     */
+    function maxWithdraw(address _owner) public view override returns (uint256) {
+        return assetsOf(_owner);
     }
 
-    function maxRedeem(address user) public view override returns (uint256) {
-        return balanceOf[user];
+    /**
+     * @dev Returns the maximum number of shares that can be redeemed by the owner.
+     *
+     * @param _owner The address of the owner.
+     * @return The maximum number of shares that can be redeemed.
+     */
+    function maxRedeem(address _owner) public view override returns (uint256) {
+        return balanceOf[_owner];
     }
 
-    function previewDeposit(uint256 amount) public view override returns (uint256 shares) {
+    /**
+     * @dev Calculates the number of shares that will be minted for a given amount.
+     *
+     * @param assets The amount of underlying assets to deposit.
+     * @return shares The estimated number of shares that would be minted.
+     */
+    function previewDeposit(uint256 assets) public view override returns (uint256 shares) {
         uint256 supply = totalSupply;
 
-        return supply == 0 ? amount : amount.mulDivDown(1, totalAssets());
+        return supply == 0 ? assets : assets.mulDivDown(1, totalAssets());
     }
 
+    /**
+     * @dev Calculates the amount of underlying assets equivalent to a given number of shares.
+     *
+     * @param shares The number of shares to be minted.
+     * @return amount The estimated amount of underlying assets.
+     */
     function previewMint(uint256 shares) public view override returns (uint256 amount) {
         uint256 supply = totalSupply;
 
         return supply == 0 ? shares : shares.mulDivUp(totalAssets(), totalSupply);
     }
 
-    function previewWithdraw(uint256 amount) public view override returns (uint256 shares) {
+    /**
+     * @dev Calculates the number of shares that would be burned for a given amount of assets.
+     *
+     * @param assets The amount of underlying assets to withdraw.
+     * @return shares The estimated number of shares that would be burned.
+     */
+    function previewWithdraw(uint256 assets) public view override returns (uint256 shares) {
         uint256 supply = asset.balanceOf(address(this));
 
-        return supply == 0 ? amount : amount.mulDivUp(supply, totalAssets());
+        return supply == 0 ? assets : assets.mulDivUp(supply, totalAssets());
     }
 
+    /**
+     * @dev Calculates the amount of underlying assets equivalent to a specific number of shares.
+     *
+     * @param shares The number of shares to redeem.
+     * @return amount The estimated amount of underlying assets that would be redeemed.
+     */
     function previewRedeem(uint256 shares) public view override returns (uint256 amount) {
         uint256 supply = totalSupply;
 
@@ -270,6 +355,12 @@ contract HederaVault is IERC4626 {
                         REWARDS LOGIC
     //////////////////////////////////////////////////////////////*/
 
+    /**
+     * @dev Adds a new reward token and its distribution amount to the vault.
+     *
+     * @param _token The address of the reward token to add.
+     * @param _amount The total amount of the reward token.
+     */
     function addReward(address _token, uint _amount) public payable {
         require(_amount != 0, "please provide amount");
         require(totalTokens != 0, "no token staked yet");
@@ -289,6 +380,12 @@ contract HederaVault is IERC4626 {
         }
     }
 
+    /**
+     * @dev Claims all pending reward tokens for the caller.
+     *
+     * @param _startPosition The starting index in the reward token list from which to begin claiming rewards.
+     * @return The index of the start position after the last claimed reward and the total number of reward tokens.
+     */
     function claimAllReward(uint _startPosition) public returns (uint, uint) {
         //claim
         for (uint i = _startPosition; i < tokenAddress.length && i < _startPosition + 10; i++) {
@@ -305,11 +402,20 @@ contract HederaVault is IERC4626 {
     }
 }
 
+/**
+ * @title Bits Library
+ * @dev A library for bit manipulation operations on uint256 values.
+ */
 library Bits {
     uint256 internal constant ONE = uint256(1);
 
-    // Sets the bit at the given 'index' in 'self' to '1'.
-    // Returns the modified value.
+    /**
+     * @dev Performs a bitwise OR operation between the original number and the bit shifted by `index` positions to the left.
+     *
+     * @param self The original uint256 number.
+     * @param index The position of the bit to set.
+     * @return The uint256 number after setting the specified bit to 1. ???????????????????????????????
+     */
     function setBit(uint256 self, uint8 index) internal pure returns (uint256) {
         return self | (ONE << index);
     }

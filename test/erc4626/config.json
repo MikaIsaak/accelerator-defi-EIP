@@ -1,0 +1,11 @@
+{
+    "vault": "0x23fb7ae562afb6df92b937240482d7ad694ae57b",
+    "vaultId": "0.0.4235432",
+    "vaultEr": "0x9164c0fcafd138dca2d51ff4e138f8fd2ab2f9dc",
+    "vaultErId": "0.0.4236872",
+    "sharesTokenAddress": "0x000000000000000000000000000000000040a0a9",
+    "sharesTokenId": "0.0.4235433",
+    "stakingTokenId": "0.0.4235430",
+    "rewardTokenId": "0.0.4236759",
+    "rewardTokenAddress": "0x000000000000000000000000000000000040a5d7"
+}

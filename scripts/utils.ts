@@ -1,16 +1,25 @@
 import {
-    Client, AccountId, PrivateKey, TokenCreateTransaction, ContractCreateFlow,
-    TokenType, TokenSupplyType, TransferTransaction, AccountBalanceQuery,
-    AccountCreateTransaction, ContractFunctionParameters, ContractExecuteTransaction,
-    TokenMintTransaction
+    Client,
+    AccountId,
+    PrivateKey,
+    TokenCreateTransaction,
+    ContractCreateFlow,
+    TokenType,
+    TokenSupplyType,
+    TransferTransaction,
+    AccountBalanceQuery,
+    AccountCreateTransaction,
+    ContractFunctionParameters,
+    ContractExecuteTransaction,
+    TokenMintTransaction,
 } from "@hashgraph/sdk";
 
 export function getClient() {
     // const client = Client.forName(process.env.HEDERA_NETWORK);
     const client = Client.forTestnet();
     client.setOperator(
-        AccountId.fromString(process.env.OPERATOR_ID || ''),
-        PrivateKey.fromStringECDSA(process.env.OPERATOR_KEY || '')
+        AccountId.fromString(process.env.OPERATOR_ID || ""),
+        PrivateKey.fromStringECDSA(process.env.OPERATOR_KEY || ""),
     );
     return client;
 }
@@ -20,7 +29,7 @@ export async function deployContract(
     bytecode: any,
     gas: any,
     contractAdminKey: any,
-    constructorParameters: any
+    constructorParameters: any,
 ) {
     const createContract = new ContractCreateFlow()
         .setGas(gas) // Increase if revert
@@ -37,20 +46,13 @@ export async function deployContract(
     const contractId = createContractRx.contractId;
 
     return contractId;
-
 }
 
-export async function TokenTransfer(
-    tokenId: any,
-    sender: any,
-    receiver: any,
-    amount: number,
-    client: Client
-) {
+export async function TokenTransfer(tokenId: any, sender: any, receiver: any, amount: number, client: Client) {
     const transferToken = await new TransferTransaction()
         .addTokenTransfer(tokenId, sender, -(amount * 1e8))
         .addTokenTransfer(tokenId, receiver, amount * 1e8)
-        .freezeWith(client)
+        .freezeWith(client);
 
     const transferTokenSubmit = await transferToken.execute(client);
     const transferTokenRx = await transferTokenSubmit.getReceipt(client);
@@ -58,13 +60,8 @@ export async function TokenTransfer(
     return transferTokenRx;
 }
 
-export async function TokenBalance(
-    accountId: any,
-    client: Client
-) {
-    const AccountBalanceQueryTx = await new AccountBalanceQuery()
-        .setAccountId(accountId)
-        .execute(client);
+export async function TokenBalance(accountId: any, client: Client) {
+    const AccountBalanceQueryTx = await new AccountBalanceQuery().setAccountId(accountId).execute(client);
     return AccountBalanceQueryTx;
 }
 
@@ -78,15 +75,8 @@ export async function createAccount(client: Client, key: any, initialBalance: an
     return createAccountRx.accountId;
 }
 
-export async function addToken(
-    VaultContract: any,
-    tokenId: any,
-    amount: any,
-    client: Client
-) {
-    let contractFunctionParameters = new ContractFunctionParameters()
-        .addAddress(tokenId)
-        .addUint256(amount * 1e8);
+export async function addToken(VaultContract: any, tokenId: any, amount: any, client: Client) {
+    let contractFunctionParameters = new ContractFunctionParameters().addAddress(tokenId).addUint256(amount * 1e8);
 
     const notifyRewardTx = await new ContractExecuteTransaction()
         .setContractId(VaultContract)
@@ -107,9 +97,10 @@ export async function createFungibleToken(
     treasuryAccountId: any,
     supplyPublicKey: any,
     client: Client,
-    privateKey: any) {
+    privateKey: any,
+) {
     // Create the transaction and freeze for manual signing
-    const tokenCreateTx = await new TokenCreateTransaction()
+    const tokenCreateTx = new TokenCreateTransaction()
         .setTokenName(tokenName)
         .setTokenSymbol(tokenSymbol)
         .setDecimals(8)
@@ -120,7 +111,6 @@ export async function createFungibleToken(
         .setSupplyKey(supplyPublicKey)
         .freezeWith(client);
 
-
     const tokenCreateSign = await tokenCreateTx.sign(privateKey);
     const tokenCreateExec = await tokenCreateTx.execute(client);
 
@@ -130,7 +120,7 @@ export async function createFungibleToken(
     const transactionFee = await tokenCreateRecord.transactionFee._valueInTinybar;
     console.log("transactionFee", transactionFee);
     console.log(`- The token ID is: ${tokenCreateRx.tokenId!.toString()}`);
-    const tokenId = tokenCreateRx.tokenId
+    const tokenId = tokenCreateRx.tokenId;
 
     return tokenId;
 }
@@ -156,4 +146,4 @@ module.exports = {
     TokenTransfer,
     TokenBalance,
     addToken,
-}
+};
